@@ -1,0 +1,11 @@
+[package]
+name = "pokemon-sprite-compression"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.66"
+description = "A library for dealing with compressed Pokemon sprites"
+readme = "readme.md"
+repository = "https://github.com/LinusU/pokemon-sprite-compression"
+license = "MIT OR Apache-2.0"
+keywords = ["pokemon", "compression", "gameboy", "graphics", "gamedev"]
+categories = ["compression", "game-development", "multimedia::encoding", "multimedia::images", "parser-implementations"]
