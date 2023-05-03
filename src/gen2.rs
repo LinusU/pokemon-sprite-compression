@@ -94,7 +94,9 @@ pub fn decompress(input: &[u8]) -> Vec<u8> {
                     result.len() - a - 1
                 };
 
-                result.extend_from_within(start..(start + count));
+                for i in 0..count {
+                    result.push(result[start + i]);
+                }
             }
 
             // Read a byte from the rom, call that value A.
@@ -163,6 +165,16 @@ mod tests {
     fn bellsprout() {
         let input = include_bytes!("../fixtures/bellsprout.2bpp.lz");
         let expected = include_bytes!("../fixtures/bellsprout.2bpp");
+
+        let actual = decompress(input);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn dugtrio() {
+        let input = include_bytes!("../fixtures/dugtrio.2bpp.lz");
+        let expected = include_bytes!("../fixtures/dugtrio.2bpp");
 
         let actual = decompress(input);
 
