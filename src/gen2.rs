@@ -163,8 +163,8 @@ mod tests {
 
     #[test]
     fn bellsprout() {
-        let input = include_bytes!("../fixtures/bellsprout.2bpp.lz");
-        let expected = include_bytes!("../fixtures/bellsprout.2bpp");
+        let input = include_bytes!("../fixtures/gen2/bellsprout.2bpp.lz");
+        let expected = include_bytes!("../fixtures/gen2/bellsprout.2bpp");
 
         let actual = decompress(input);
 
@@ -173,8 +173,8 @@ mod tests {
 
     #[test]
     fn dugtrio() {
-        let input = include_bytes!("../fixtures/dugtrio.2bpp.lz");
-        let expected = include_bytes!("../fixtures/dugtrio.2bpp");
+        let input = include_bytes!("../fixtures/gen2/dugtrio.2bpp.lz");
+        let expected = include_bytes!("../fixtures/gen2/dugtrio.2bpp");
 
         let actual = decompress(input);
 
@@ -183,8 +183,8 @@ mod tests {
 
     #[test]
     fn pikachu() {
-        let input = include_bytes!("../fixtures/pikachu.2bpp.lz");
-        let expected = include_bytes!("../fixtures/pikachu.2bpp");
+        let input = include_bytes!("../fixtures/gen2/pikachu.2bpp.lz");
+        let expected = include_bytes!("../fixtures/gen2/pikachu.2bpp");
 
         let actual = decompress(input);
 
@@ -193,8 +193,8 @@ mod tests {
 
     #[test]
     fn steelix() {
-        let input = include_bytes!("../fixtures/steelix.2bpp.lz");
-        let expected = include_bytes!("../fixtures/steelix.2bpp");
+        let input = include_bytes!("../fixtures/gen2/steelix.2bpp.lz");
+        let expected = include_bytes!("../fixtures/gen2/steelix.2bpp");
 
         let actual = decompress(input);
 
