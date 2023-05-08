@@ -1,9 +1,5 @@
-const TABLE1: [usize; 16] = [
-    1, 3, 7, 15, 31, 63, 127, 255, 511, 1023, 2047, 4095, 8191, 16383, 32767, 65535,
-];
-
 #[rustfmt::skip]
-const TABLE2: [[usize; 16]; 4] = [
+const INV_XOR_TABLE: [[u8; 16]; 4] = [
     [0x0, 0x1, 0x3, 0x2, 0x7, 0x6, 0x4, 0x5, 0xf, 0xe, 0xc, 0xd, 0x8, 0x9, 0xb, 0xa],
     [0xf, 0xe, 0xc, 0xd, 0x8, 0x9, 0xb, 0xa, 0x0, 0x1, 0x3, 0x2, 0x7, 0x6, 0x4, 0x5], // prev ^ 0xf
     [0x0, 0x8, 0xc, 0x4, 0xe, 0x6, 0x2, 0xa, 0xf, 0x7, 0x3, 0xb, 0x1, 0x9, 0xd, 0x5],
@@ -50,42 +46,45 @@ impl<'a> BitStream<'a> {
 
         n
     }
+
+    fn read_compress_int(&mut self) -> usize {
+        let mut n = 1;
+
+        while self.next() {
+            n += 1;
+        }
+
+        ((1 << n) | self.read_int(n)) - 1
+    }
 }
 
 struct Decompressor<'a> {
-    bs: BitStream<'a>,
-    sizex: usize,
-    sizey: usize,
-    size: usize,
+    data: BitStream<'a>,
+    width: usize,
+    height: usize,
 }
 
 impl<'a> Decompressor<'a> {
     fn new(data: &'a [u8]) -> Self {
-        let mut bs = BitStream::new(data);
+        let mut data = BitStream::new(data);
 
-        let sizex = bs.read_int(4) * TILESIZE;
-        let sizey = bs.read_int(4);
-
-        let size = sizex * sizey;
+        let width = data.read_int(4);
+        let height = data.read_int(4);
 
         Self {
-            bs,
-            sizex,
-            sizey,
-            size,
+            data,
+            width,
+            height,
         }
     }
 
     fn decompress(&mut self) -> Vec<u8> {
-        let mut rams = [vec![], vec![]];
+        let order_reversed = self.data.next();
 
-        let r1 = self.bs.next() as usize;
-        let r2 = r1 ^ 1;
+        let mut ram0 = self.fillram();
 
-        self.fillram(&mut rams[r1]);
-
-        let mode = if self.bs.next() {
-            if self.bs.next() {
+        let mode = if self.data.next() {
+            if self.data.next() {
                 2
             } else {
                 1
@@ -94,101 +93,108 @@ impl<'a> Decompressor<'a> {
             0
         };
 
-        self.fillram(&mut rams[r2]);
-
-        bitgroups_to_bytes(&mut rams[0]);
-        bitgroups_to_bytes(&mut rams[1]);
+        let mut ram1 = self.fillram();
 
         match mode {
             0 => {
-                self.decode(&mut rams[0]);
-                self.decode(&mut rams[1]);
+                self.decode(&mut ram0);
+                self.decode(&mut ram1);
             }
             1 => {
-                self.decode(&mut rams[r1]);
-                let r1_ram = rams[r1].clone();
-                self.xor(&r1_ram, &mut rams[r2]);
+                self.decode(&mut ram0);
+                self.xor(&ram0, &mut ram1);
             }
             2 => {
-                self.decode(&mut rams[r2]);
-                self.decode(&mut rams[r1]);
-                let r1_ram = rams[r1].clone();
-                self.xor(&r1_ram, &mut rams[r2]);
+                self.decode(&mut ram1);
+                self.decode(&mut ram0);
+                self.xor(&ram0, &mut ram1);
             }
             _ => unreachable!(),
         }
 
-        assert_eq!(rams[0].len(), self.size);
-        assert_eq!(rams[1].len(), self.size);
+        let mut result = Vec::with_capacity(ram0.len() + ram1.len());
 
-        let mut result = Vec::with_capacity(self.size * 2);
-        for (a, b) in rams[0].iter().zip(rams[1].iter()) {
-            result.push(*a);
-            result.push(*b);
+        for (a, b) in ram0.iter().zip(ram1.iter()) {
+            if order_reversed {
+                result.push(*b);
+                result.push(*a);
+            } else {
+                result.push(*a);
+                result.push(*b);
+            }
         }
 
         result
     }
 
-    fn fillram(&mut self, ram: &mut Vec<u8>) {
-        let mut mode = self.bs.next();
-        let size = self.size * 4;
-        while ram.len() < size {
-            if !mode {
-                self.read_rle_chunk(ram);
-                mode = true;
-            } else {
-                self.read_data_chunk(ram, size);
-                mode = false;
+    fn fillram(&mut self) -> Vec<u8> {
+        let plane_width = self.width * TILESIZE;
+        let size = plane_width * self.height;
+
+        let mut z = if self.data.next() {
+            0
+        } else {
+            self.data.read_compress_int()
+        };
+
+        let mut interlaced = Vec::with_capacity(size);
+
+        while interlaced.len() < size {
+            let mut byte: u8 = 0;
+
+            for shift in [6, 4, 2, 0] {
+                if z > 0 {
+                    z -= 1;
+                    continue;
+                }
+
+                let bitgroup = self.data.read_int(2) as u8;
+
+                if bitgroup == 0 {
+                    z = self.data.read_compress_int() - 1;
+                    continue;
+                }
+
+                byte |= bitgroup << shift;
+            }
+
+            interlaced.push(byte);
+        }
+
+        let mut deinterlaced = Vec::with_capacity(size);
+
+        for y in 0..self.height {
+            for x in 0..plane_width {
+                let bit_shift = 6 - ((x % 4) * 2);
+                let byte_index = (y * plane_width) + (x / 4);
+
+                deinterlaced.push(
+                    ((interlaced[byte_index] >> bit_shift) & 0b11) << 6
+                        | ((interlaced[byte_index + self.width * 2] >> bit_shift) & 0b11) << 4
+                        | ((interlaced[byte_index + self.width * 4] >> bit_shift) & 0b11) << 2
+                        | ((interlaced[byte_index + self.width * 6] >> bit_shift) & 0b11),
+                );
             }
         }
-        assert_eq!(ram.len(), size);
-        self.deinterlace_bitgroups(ram);
-    }
 
-    fn read_rle_chunk(&mut self, ram: &mut Vec<u8>) {
-        let mut i = 0;
-
-        while self.bs.next() {
-            i += 1;
-        }
-
-        let mut n = TABLE1[i];
-        let a = self.bs.read_int(i + 1);
-        n += a;
-
-        for _ in 0..n {
-            ram.push(0);
-        }
-    }
-
-    fn read_data_chunk(&mut self, ram: &mut Vec<u8>, size: usize) {
-        loop {
-            let bitgroup = self.bs.read_int(2);
-            if bitgroup == 0 {
-                break;
-            }
-            ram.push(bitgroup as u8);
-
-            if size <= ram.len() {
-                break;
-            }
-        }
+        deinterlaced
     }
 
     fn decode(&self, ram: &mut [u8]) {
-        for x in 0..self.sizex {
+        let plane_width = self.width * TILESIZE;
+
+        for x in 0..plane_width {
             let mut bit = 0;
-            for y in 0..self.sizey {
-                let i = y * self.sizex + x;
+            for y in 0..self.height {
+                let i = y * plane_width + x;
 
                 let mut a = (ram[i] >> 4) & 0xf;
                 let mut b = ram[i] & 0xf;
 
-                a = TABLE2[bit as usize][a as usize] as u8;
+                a = INV_XOR_TABLE[bit as usize][a as usize];
                 bit = a & 1;
 
-                b = TABLE2[bit as usize][b as usize] as u8;
+                b = INV_XOR_TABLE[bit as usize][b as usize];
                 bit = b & 1;
 
                 ram[i] = (a << 4) | b;
@@ -196,35 +202,10 @@ impl<'a> Decompressor<'a> {
         }
     }
 
-    fn xor(&self, ram1: &[u8], ram2: &mut Vec<u8>) {
-        for i in 0..ram2.len() {
-            ram2[i] ^= ram1[i];
+    fn xor(&self, ram0: &[u8], ram1: &mut [u8]) {
+        for i in 0..ram1.len() {
+            ram1[i] ^= ram0[i];
         }
-    }
-
-    fn deinterlace_bitgroups(&self, l: &mut Vec<u8>) {
-        let bits = std::mem::replace(l, Vec::with_capacity(l.len()));
-
-        for y in 0..self.sizey {
-            for x in 0..self.sizex {
-                let mut i = 4 * y * self.sizex + x;
-                for _ in 0..4 {
-                    l.push(bits[i]);
-                    i += self.sizex;
-                }
-            }
-        }
-
-        assert_eq!(l.len(), bits.len());
-    }
-}
-
-fn bitgroups_to_bytes(l: &mut Vec<u8>) {
-    let bits = std::mem::replace(l, Vec::with_capacity(l.len() / 4));
-
-    for i in (0..(bits.len() - 3)).step_by(4) {
-        let n = (bits[i] << 6) | (bits[i + 1] << 4) | (bits[i + 2] << 2) | bits[i + 3];
-        l.push(n);
     }
 }
 
