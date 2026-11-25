@@ -10,6 +10,9 @@ Implementation status:
 - [x] Gen 2
     - [x] Decompression
     - [ ] Compression
+- [x] Gen 3
+    - [x] Decompression
+    - [ ] Compression
 - [ ] Future generations
 
 ## Installation
@@ -34,8 +37,20 @@ const rom = std::fs::read("pokecrystal.gbc").unwrap();
 let sprite = pokemon_sprite_compression::gen2::decompress(&rom[0x156ea1..]);
 ```
 
+```rust
+let rom = std::fs::read("pokeemerald.gba").unwrap();
+
+// Pikachu animated front sprite in the English Emerald ROM
+let tiles = pokemon_sprite_compression::gen3::decompress(&rom[0xb09964..]);
+```
+
+Gen III decompression returns raw GBA 4bpp tiles for sprite data. The same
+decoder also handles separately compressed palette data.
+
 ## Acknowledgements
 
 Huge thanks to the [pret team](https://github.com/orgs/pret/people) and [Andrew Ekstedt](https://github.com/magical) for their work on [gen I decompression](https://github.com/pret/pokered/blob/1b9540cc49f76626445d2cb5744be1e81c709ca8/tools/pic.py).
 
 Huge thanks to [wgjordan on Hacker News](https://news.ycombinator.com/user?id=wgjordan) for [reverse engineering and documenting the gen II compression algorithm](https://www.romhacking.net/utilities/59/). I've included a copy of the documentation in this repository for convenience, as the file `doc/gen2.txt`.
+
+The Gen III fixtures were generated with `gbagfx` from the [Pikachu assets in pret/pokeemerald](https://github.com/pret/pokeemerald/tree/9103e529c2fbdd7add4a1ff3350c6c1f92112c42/graphics/pokemon/pikachu).
