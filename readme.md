@@ -54,3 +54,8 @@ Huge thanks to the [pret team](https://github.com/orgs/pret/people) and [Andrew 
 Huge thanks to [wgjordan on Hacker News](https://news.ycombinator.com/user?id=wgjordan) for [reverse engineering and documenting the gen II compression algorithm](https://www.romhacking.net/utilities/59/). I've included a copy of the documentation in this repository for convenience, as the file `doc/gen2.txt`.
 
 The Gen III fixtures were generated with `gbagfx` from the [Pikachu assets in pret/pokeemerald](https://github.com/pret/pokeemerald/tree/9103e529c2fbdd7add4a1ff3350c6c1f92112c42/graphics/pokemon/pikachu).
+
+The clipping fixture uses the Ruby/Sapphire Inside of Truck tileset. The
+`pret/pokeruby` build generates 62 tiles and reproduces the original overflow
+with `-overflow 10`, so the final match extends 10 bytes past the declared
+size. [Build rule](https://github.com/pret/pokeruby/blob/5784633ce4ef7ade1a7f2d2d0c288e3d5e6cdd7f/tilesets.mk#L65-L66) · [Source tileset](https://github.com/pret/pokeruby/blob/5784633ce4ef7ade1a7f2d2d0c288e3d5e6cdd7f/data/tilesets/secondary/inside_of_truck/tiles.png)

@@ -2,12 +2,13 @@
 ///
 /// The input starts at the LZ10 header. Bytes after the first compressed
 /// stream are ignored, so the input can be a slice from the asset's ROM offset.
+/// A final back-reference is clipped to the output size declared in the header.
 /// For sprite data, the output is the raw GBA 4bpp tile data.
 ///
 /// # Panics
 ///
 /// Panics if the header is invalid, the stream is truncated, or a back-reference
-/// falls outside the decoded prefix or the declared output size.
+/// points before the start of the output.
 pub fn decompress(input: &[u8]) -> Vec<u8> {
     assert!(input.len() >= 4, "truncated LZ10 header");
     assert_eq!(input[0], 0x10, "invalid LZ10 compression type");
@@ -31,13 +32,9 @@ pub fn decompress(input: &[u8]) -> Vec<u8> {
                 let length = usize::from(pair >> 12) + 3;
                 let distance = usize::from(pair & 0x0fff) + 1;
                 assert!(distance <= output.len(), "invalid LZ10 back-reference");
-                assert!(
-                    length <= output_len - output.len(),
-                    "LZ10 back-reference exceeds declared output size"
-                );
 
                 // A match can overlap the bytes it produces.
-                for _ in 0..length {
+                for _ in 0..length.min(output_len - output.len()) {
                     output.push(output[output.len() - distance]);
                 }
             }
@@ -68,6 +65,14 @@ mod tests {
     #[test]
     fn pikachu_animated_front() {
         assert_eq!(decompress(ANIMATED_INPUT), ANIMATED_TILES);
+    }
+
+    #[test]
+    fn clips_final_match_in_truck_tileset() {
+        let input = include_bytes!("../fixtures/gen3/inside-of-truck.4bpp.lz");
+        let expected = include_bytes!("../fixtures/gen3/inside-of-truck.4bpp");
+
+        assert_eq!(decompress(input), expected);
     }
 
     #[test]
